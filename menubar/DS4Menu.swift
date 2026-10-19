@@ -1,11 +1,37 @@
 // ds4 menu bar item: runs the ds4proxy service as a child (so it inherits this app's
 // ~/Documents access, where ds4 and its models live) and shows/controls it.
-// Built by ../install.sh with swiftc (no Xcode project needed).
+// Built by build.sh with swiftc (no Xcode project needed), which embeds ds4proxy.py as
+// proxySourceBase64: the proxy runs from the signed binary, never from a file anyone can edit.
 import AppKit
 
 let control = "http://127.0.0.1:8011"
 let stateDir = FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent(".local/share/ds4-menu")
 let logURL = stateDir.appendingPathComponent("proxy.log")
+
+/// The state dir must be a real directory we own, not a symlink planted to redirect our writes.
+func stateDirIsSafe() -> Bool {
+    try? FileManager.default.createDirectory(at: stateDir, withIntermediateDirectories: true,
+                                             attributes: [.posixPermissions: 0o700])
+    var st = stat()
+    guard lstat(stateDir.path, &st) == 0, st.st_mode & S_IFMT == S_IFDIR, st.st_uid == getuid() else { return false }
+    chmod(stateDir.path, 0o700)
+    return true
+}
+
+/// Writes name in the state dir via a fresh O_EXCL | O_NOFOLLOW temp file and a rename, so a
+/// planted symlink can't send the write anywhere else.
+func writePrivate(_ name: String, _ data: Data, mode: mode_t) throws {
+    let tmp = stateDir.appendingPathComponent(".\(name).\(UUID().uuidString)").path
+    let fd = open(tmp, O_WRONLY | O_CREAT | O_EXCL | O_NOFOLLOW | O_CLOEXEC, mode)
+    guard fd >= 0 else { throw POSIXError(POSIXErrorCode(rawValue: errno) ?? .EIO) }
+    let h = FileHandle(fileDescriptor: fd, closeOnDealloc: true)
+    h.write(data)
+    try h.close()
+    guard rename(tmp, stateDir.appendingPathComponent(name).path) == 0 else {
+        unlink(tmp)
+        throw POSIXError(POSIXErrorCode(rawValue: errno) ?? .EIO)
+    }
+}
 
 final class App: NSObject, NSApplicationDelegate, NSMenuDelegate {
     let item = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
@@ -16,10 +42,14 @@ final class App: NSObject, NSApplicationDelegate, NSMenuDelegate {
     var status: [String: Any]?
 
     func applicationDidFinishLaunching(_ n: Notification) {
-        try? FileManager.default.createDirectory(at: stateDir, withIntermediateDirectories: true)
         menu.delegate = self
         item.menu = menu
         item.button?.imagePosition = .imageLeading
+        guard stateDirIsSafe() else {
+            alert("ds4", "\(stateDir.path) isn't a directory owned by you (is it a symlink?), so ds4 won't start.")
+            NSApp.terminate(nil)
+            return
+        }
         startProxy()
         redraw()
         Timer.scheduledTimer(withTimeInterval: 2, repeats: true) { [weak self] _ in self?.refresh() }
@@ -28,17 +58,23 @@ final class App: NSObject, NSApplicationDelegate, NSMenuDelegate {
     // MARK: the proxy child process
 
     func startProxy() {
-        // kept outside the bundle so editing it doesn't break the signature (and the
-        // ~/Documents permission that goes with it); install.sh copies it here
-        let script = stateDir.appendingPathComponent("app/ds4proxy.py").path
-        if !FileManager.default.fileExists(atPath: logURL.path) {
-            FileManager.default.createFile(atPath: logURL.path, contents: nil)
-        }
-        let log = try? FileHandle(forWritingTo: logURL)
-        log?.seekToEndOfFile()
+        // the source is part of this signed binary and goes to python over a pipe, so there's no
+        // file on disk that another process could swap for its own code
+        guard let source = Data(base64Encoded: proxySourceBase64) else { return }
+        let fd = open(logURL.path, O_WRONLY | O_APPEND | O_CREAT | O_NOFOLLOW | O_CLOEXEC, 0o600)
+        let log = fd >= 0 ? FileHandle(fileDescriptor: fd, closeOnDealloc: true) : FileHandle.nullDevice
+        let input = Pipe()
         let p = Process()
         p.executableURL = URL(fileURLWithPath: "/usr/bin/python3")
-        p.arguments = ["-I", script]
+        p.arguments = ["-I", "-"]
+        // a clean environment: nothing from launchd's (user-editable) LaunchAgent reaches the
+        // proxy, and the ds4 path is the one compiled in
+        p.environment = [
+            "HOME": NSHomeDirectory(),
+            "PATH": "/usr/bin:/bin:/usr/sbin:/sbin",
+            "DS4_DIR": String(decoding: Data(base64Encoded: ds4DirBase64) ?? Data(), as: UTF8.self),
+        ]
+        p.standardInput = input
         p.standardOutput = log
         p.standardError = log
         p.terminationHandler = { [weak self] _ in
@@ -50,7 +86,15 @@ final class App: NSObject, NSApplicationDelegate, NSMenuDelegate {
                 DispatchQueue.main.asyncAfter(deadline: .now() + delay) { self.startProxy() }
             }
         }
-        do { try p.run(); proxy = p } catch { NSLog("ds4: can't start proxy: \(error)") }
+        do {
+            try p.run()
+            proxy = p
+            // python reads the whole script before running it; EOF tells it that's all
+            DispatchQueue.global().async {
+                input.fileHandleForWriting.write(source)
+                try? input.fileHandleForWriting.close()
+            }
+        } catch { NSLog("ds4: can't start proxy: \(error)") }
     }
 
     func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
@@ -281,8 +325,7 @@ final class App: NSObject, NSApplicationDelegate, NSMenuDelegate {
         // the agent loads its model and Metal kernels relative to the ds4 checkout
         let script = "#!/bin/zsh\ncd \(quote(ds4)) && exec ./ds4-agent --chdir \(quote(dir)) \(extra)\n"
         do {
-            try script.write(to: cmd, atomically: true, encoding: .utf8)
-            try FileManager.default.setAttributes([.posixPermissions: 0o700], ofItemAtPath: cmd.path)
+            try writePrivate("agent.command", Data(script.utf8), mode: 0o700)
         } catch { alert("ds4", "Couldn't write \(cmd.path): \(error.localizedDescription)"); return }
         call("POST", "/stop") { _ in NSWorkspace.shared.open(cmd) }
     }

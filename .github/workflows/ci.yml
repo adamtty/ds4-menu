@@ -39,7 +39,7 @@ jobs:
           persist-credentials: false
 
       - name: shellcheck
-        run: pipx run --spec "shellcheck-py==${SHELLCHECK_VERSION}" shellcheck install.sh
+        run: pipx run --spec "shellcheck-py==${SHELLCHECK_VERSION}" shellcheck install.sh menubar/build.sh
 
       - name: ruff
         run: pipx run "ruff==${RUFF_VERSION}" check ds4proxy.py tests/
@@ -62,12 +62,13 @@ jobs:
         with:
           persist-credentials: false
 
-      # same flags as install.sh
+      # the same build install.sh does, proxy embedded
       - name: Compile menu bar app
         run: |
-          swiftc -O -target arm64-apple-macos13 -framework AppKit \
-            -o "$RUNNER_TEMP/ds4" menubar/DS4Menu.swift
+          menubar/build.sh "$RUNNER_TEMP/ds4"
           file "$RUNNER_TEMP/ds4"
+          codesign --force --options runtime --sign - "$RUNNER_TEMP/ds4"
+          codesign --verify --verbose=2 "$RUNNER_TEMP/ds4"
 
       - name: Compile icon tool
         run: swiftc -o "$RUNNER_TEMP/make-icon" menubar/make-icon.swift

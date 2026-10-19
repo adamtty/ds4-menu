@@ -9,6 +9,10 @@ switches models first, so clients can pick the model the usual way.
 Started (and supervised) by the ds4 menu bar app, never by launchd directly: the model lives in
 ~/Documents, which macOS only lets the app read, and children inherit that permission.
 
+The public port only serves POST /v1/... and GET /v1/models, only for a loopback Host, and refuses
+cross-site browser requests, so a web page can't make the model load. Setting "api_key" in
+settings.json also requires it as a bearer token or x-api-key.
+
 Control API on 127.0.0.1:8011, every request needs the X-Token header (token file in the state
 dir, mode 600):
   GET  /status
@@ -23,6 +27,8 @@ import signal
 import subprocess
 import sys
 import time
+import urllib.parse
+from http import HTTPStatus
 
 DS4_DIR = os.environ.get("DS4_DIR", os.path.expanduser("~/Documents/code-work/ds4"))
 STATE = os.path.expanduser("~/.local/share/ds4-menu")
@@ -37,10 +43,56 @@ MODEL_RE = re.compile(rb'"model"\s*:\s*"([^"]+)"')
 FAMILIES = ("glm", "deepseek", "qwen")
 # tables ds4 reads straight from the file and never maps, so they don't count toward RAM
 DISK_ONLY = {"qwen3.8-flash-next": int(95.37 * (1 << 30))}
+LOOPBACK = re.compile(r"^(127\.0\.0\.1|localhost|\[::1\])(:\d+)?$", re.I)
+MAX_CONTROL_BODY = 64 << 10
 
 
 def log(*a):
     print(time.strftime("%H:%M:%S"), *a, flush=True)
+
+
+def open_state_dir():
+    """The state dir as a descriptor (ours, private, not a symlink); all its files go through it."""
+    os.makedirs(STATE, mode=0o700, exist_ok=True)
+    try:
+        fd = os.open(STATE, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
+    except OSError as e:
+        sys.exit("can't open %s safely: %s" % (STATE, e))
+    if os.fstat(fd).st_uid != os.getuid():
+        sys.exit(STATE + " belongs to another user")
+    os.fchmod(fd, 0o700)
+    return fd
+
+
+def read_private(dir_fd, name):
+    fd = os.open(name, os.O_RDONLY | os.O_NOFOLLOW, dir_fd=dir_fd)
+    with os.fdopen(fd, "rb") as f:
+        return f.read()
+
+
+def write_private(dir_fd, name, data):
+    """Atomically replace name with data (mode 600). The temp file gets a fresh random name and
+    O_EXCL | O_NOFOLLOW, so a planted symlink can't redirect the write somewhere else."""
+    tmp = ".%s.%s" % (name, secrets.token_hex(8))
+    fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600, dir_fd=dir_fd)
+    with os.fdopen(fd, "wb") as f:
+        f.write(data)
+    os.replace(tmp, name, src_dir_fd=dir_fd, dst_dir_fd=dir_fd)
+
+
+def parse_head(head):
+    lines = head.decode("latin-1").split("\r\n")
+    parts = lines[0].split(" ")
+    hdrs = {k.strip().lower(): v.strip() for k, v in (ln.split(":", 1) for ln in lines[1:] if ":" in ln)}
+    return parts[0], parts[1] if len(parts) > 1 else "", hdrs
+
+
+async def send_json(writer, code, out):
+    data = json.dumps(out).encode()
+    writer.write(b"HTTP/1.1 %d %s\r\nContent-Type: application/json\r\nConnection: close\r\n"
+                 b"Content-Length: %d\r\n\r\n" % (code, HTTPStatus(code).phrase.encode(), len(data)) + data)
+    await writer.drain()
+    writer.close()
 
 
 def ram_bytes():
@@ -62,10 +114,10 @@ def pid_command(pid):
 
 class Proxy:
     def __init__(self):
+        self.dir_fd = open_state_dir()
         self.settings = dict(DEFAULTS)
         try:
-            with open(os.path.join(STATE, "settings.json")) as f:
-                self.settings.update(json.load(f))
+            self.settings.update(json.loads(read_private(self.dir_fd, "settings.json")))
         except (OSError, ValueError):
             pass
         self.ram = ram_bytes()
@@ -84,10 +136,7 @@ class Proxy:
     # -- settings / models ------------------------------------------------------
 
     def save(self):
-        tmp = os.path.join(STATE, "settings.json.tmp")
-        with open(tmp, "w") as f:
-            json.dump(self.settings, f, indent=2)
-        os.replace(tmp, os.path.join(STATE, "settings.json"))
+        write_private(self.dir_fd, "settings.json", json.dumps(self.settings, indent=2).encode())
 
     def models(self):
         d = os.path.join(DS4_DIR, "gguf")
@@ -265,17 +314,49 @@ class Proxy:
 
     # -- the public port: raw TCP piping, so streaming just works -----------------
 
+    def refuse(self, method, path, hdrs):
+        """Why a request on the public port mustn't reach (or load) the model, as (code, message)."""
+        if not LOOPBACK.match(hdrs.get("host", "")):
+            return 421, "the Host header must be 127.0.0.1 or localhost"  # DNS rebinding
+        origin = hdrs.get("origin")
+        if origin is not None and not LOOPBACK.match(urllib.parse.urlsplit(origin).netloc):
+            return 403, "cross-origin browser requests aren't allowed"
+        if hdrs.get("sec-fetch-site", "none") not in ("none", "same-origin", "same-site"):
+            return 403, "cross-site browser requests aren't allowed"
+        route = path.split("?")[0]
+        served = route.startswith("/v1/") if method == "POST" else method == "GET" and route.startswith("/v1/models")
+        if not served:
+            return 404, "only POST /v1/... and GET /v1/models are served here"
+        key = self.settings.get("api_key")
+        if key:
+            given = hdrs.get("x-api-key") or re.sub(r"^bearer\s+", "", hdrs.get("authorization", ""), flags=re.I)
+            if not secrets.compare_digest(given.encode(), str(key).encode()):
+                return 401, "missing or wrong API key"
+        return None
+
     async def client(self, reader, writer):
         cid = id(writer)
-        # read the request head first: it names the model, and a refusal can be a proper HTTP
-        # reply (ds4-server answers one request per connection, so this is the only one)
+        # read and vet the request head before anything can load the model; a refusal is a proper
+        # HTTP reply (ds4-server answers one request per connection, so this is the only one)
         try:
-            first = await asyncio.wait_for(reader.read(65536), 30)
-        except asyncio.TimeoutError:
-            first = b""
-        if not first:
+            head = await asyncio.wait_for(reader.readuntil(b"\r\n\r\n"), 30)
+        except (asyncio.TimeoutError, asyncio.IncompleteReadError, asyncio.LimitOverrunError, OSError):
             writer.close()
             return
+        method, path, hdrs = parse_head(head)
+        refused = self.refuse(method, path, hdrs)
+        if refused:
+            log("refused %s %s: %s" % (method, path[:80], refused[1]))
+            await send_json(writer, refused[0], {"error": {"type": "refused", "message": "ds4: " + refused[1]}})
+            return
+        # the start of the body names the model; it's forwarded with the head below
+        body = b""
+        if hdrs.get("content-length", "0") != "0" or "transfer-encoding" in hdrs:
+            try:
+                body = await asyncio.wait_for(reader.read(65536), 30)
+            except asyncio.TimeoutError:
+                pass
+        first = head + body
         err = ""
         async with self.switch_lock:  # two requests for the new model switch once
             want = self.model_for(first)
@@ -287,11 +368,7 @@ class Proxy:
         if not err and self.state != "ready":
             err = await self.ensure_started()
         if err:
-            body = json.dumps({"error": {"type": "unavailable", "message": "ds4: " + err}}).encode()
-            writer.write(b"HTTP/1.1 503 Service Unavailable\r\nContent-Type: application/json\r\n"
-                         b"Connection: close\r\nContent-Length: %d\r\n\r\n" % len(body) + body)
-            await writer.drain()
-            writer.close()
+            await send_json(writer, 503, {"error": {"type": "unavailable", "message": "ds4: " + err}})
             return
         try:
             br, bw = await asyncio.open_connection("127.0.0.1", BACKEND_PORT)
@@ -349,31 +426,32 @@ class Proxy:
     async def control(self, reader, writer):
         try:
             head = await asyncio.wait_for(reader.readuntil(b"\r\n\r\n"), 10)
-            lines = head.decode("latin-1").split("\r\n")
-            method, path = lines[0].split(" ")[:2]
-            hdrs = {k.lower(): v.strip() for k, v in (ln.split(":", 1) for ln in lines[1:] if ":" in ln)}
-            body = await reader.readexactly(int(hdrs.get("content-length", 0) or 0))
-            if not secrets.compare_digest(hdrs.get("x-token", ""), self.token):
+            method, path, hdrs = parse_head(head)
+            length = int(hdrs.get("content-length", 0) or 0)
+            # authenticate on the head alone; only then read a small body, with a deadline
+            if not secrets.compare_digest(hdrs.get("x-token", "").encode(), self.token.encode()):
                 code, out = 403, {"error": "bad token"}
-            elif (method, path) == ("GET", "/status"):
-                code, out = 200, self.status()
-            elif (method, path) == ("POST", "/start"):
-                err = await self.ensure_started(force=True)
-                code, out = (500, {"error": err}) if err else (200, self.status())
-            elif (method, path) == ("POST", "/stop"):
-                await self.stop("asked from the menu")
-                code, out = 200, self.status()
-            elif (method, path) == ("POST", "/settings"):
-                code, out = await self.change(json.loads(body or b"{}"))
+            elif not 0 <= length <= MAX_CONTROL_BODY:
+                code, out = 413, {"error": "body too large"}
             else:
-                code, out = 404, {"error": "not found"}
+                body = await asyncio.wait_for(reader.readexactly(length), 10)
+                code, out = await self.control_route(method, path, body)
         except Exception as e:  # malformed request; nothing to keep alive for
             code, out = 400, {"error": str(e)}
-        data = json.dumps(out).encode()
-        writer.write(b"HTTP/1.1 %d X\r\nContent-Type: application/json\r\nConnection: close\r\n"
-                     b"Content-Length: %d\r\n\r\n" % (code, len(data)) + data)
-        await writer.drain()
-        writer.close()
+        await send_json(writer, code, out)
+
+    async def control_route(self, method, path, body):
+        if (method, path) == ("GET", "/status"):
+            return 200, self.status()
+        if (method, path) == ("POST", "/start"):
+            err = await self.ensure_started(force=True)
+            return (500, {"error": err}) if err else (200, self.status())
+        if (method, path) == ("POST", "/stop"):
+            await self.stop("asked from the menu")
+            return 200, self.status()
+        if (method, path) == ("POST", "/settings"):
+            return await self.change(json.loads(body or b"{}"))
+        return 404, {"error": "not found"}
 
     async def change(self, req):
         if "pinned" in req:
@@ -394,13 +472,8 @@ class Proxy:
         return 200, self.status()
 
     async def main(self):
-        os.makedirs(STATE, exist_ok=True)
         self.token = secrets.token_hex(16)
-        path = os.path.join(STATE, "token")
-        fd = os.open(path + ".tmp", os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
-        os.write(fd, self.token.encode())
-        os.close(fd)
-        os.replace(path + ".tmp", path)
+        write_private(self.dir_fd, "token", self.token.encode())
         self.save()
         public = await asyncio.start_server(self.client, "127.0.0.1", LISTEN_PORT)
         ctl = await asyncio.start_server(self.control, "127.0.0.1", CONTROL_PORT)

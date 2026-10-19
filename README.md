@@ -73,9 +73,9 @@ If your ds4 checkout isn't at `~/Documents/code-work/ds4`:
 DS4_DIR=~/src/ds4 ./install.sh
 ```
 
-Re-run `./install.sh` after changing any source file. The app is only rebuilt when the Swift
-code, icon or installer changes. Each rebuild looks like a new app to macOS, so it asks for
-Documents access again. Edits to the proxy alone are simply copied into place.
+Re-run `./install.sh` after changing any source file, including `ds4proxy.py`: the proxy is
+compiled into the app (see [Security](#security)). Each rebuild looks like a new app to macOS, so
+it asks for Documents access again.
 
 ```sh
 ./install.sh uninstall     # stops and removes the app; settings and log are kept
@@ -115,6 +115,7 @@ Settings live in `~/.local/share/ds4-menu/settings.json`. The menu writes most o
 | `idle_min` | `15` | Minutes without traffic before unloading |
 | `models` | `{}` | Per-model overrides, e.g. `{"file.gguf": {"ctx": 65536, "args": ["--mtp"]}}` |
 | `agent_args` | `[]` | Extra arguments for *Open ds4 Agent in Folder…*, e.g. `["--ctx", "262144"]` |
+| `api_key` | unset | When set, requests on `:8010` need it as `Authorization: Bearer …` or `x-api-key` |
 
 Without an override, resident models get a 100K context and SSD-streamed ones get 32K.
 
@@ -134,8 +135,9 @@ The menu talks to the proxy on `127.0.0.1:8011`. Every request needs the `X-Toke
 
 | Path | What |
 | --- | --- |
-| [`ds4proxy.py`](ds4proxy.py) | The proxy and control API. Python standard library only |
-| [`menubar/DS4Menu.swift`](menubar/DS4Menu.swift) | The AppKit status item, compiled with `swiftc` (no Xcode project) |
+| [`ds4proxy.py`](ds4proxy.py) | The proxy and control API. Python standard library only, embedded into the app at build time |
+| [`menubar/DS4Menu.swift`](menubar/DS4Menu.swift) | The AppKit status item |
+| [`menubar/build.sh`](menubar/build.sh) | Compiles the app with `swiftc` (no Xcode project), embedding the proxy and the ds4 path |
 | [`menubar/make-icon.swift`](menubar/make-icon.swift) | Turns the wordmark into the `logo.png` / `logo@2x.png` template images |
 | [`install.sh`](install.sh) | Build, sign, install and uninstall |
 | `~/.local/share/ds4-menu/proxy.log` | The proxy and ds4-server log (*Open Log* in the menu) |
@@ -145,6 +147,29 @@ Regenerate the icon with:
 ```sh
 swift menubar/make-icon.swift menubar/ds4-logo-source.png menubar/
 ```
+
+## Security
+
+The app holds macOS permission to read your Documents folder, and the proxy can make a ~90 GB
+model load, so both are locked down:
+
+- **Nothing editable runs with the app's permission.** The proxy's source is compiled into the
+  signed app binary and handed to `/usr/bin/python3 -I` over a pipe. The ds4 path is compiled in too,
+  the proxy gets a clean environment, and the app uses the hardened runtime, which ignores `DYLD_*`
+  variables. Changing the binary invalidates its signature, and macOS then withdraws the
+  Documents permission.
+- **Web pages can't reach the model.** `:8010` only serves `POST /v1/…` and `GET /v1/models`,
+  requires a loopback `Host` header (against DNS rebinding), and refuses cross-site browser requests
+  using `Origin` and `Sec-Fetch-Site`. Anything else is refused before the model is touched. Set
+  `api_key` to require a key from every client as well.
+- **State files can't be redirected.** `~/.local/share/ds4-menu` must be a real directory you own
+  and is kept at mode `700`. Files are written through a directory handle using fresh
+  `O_EXCL | O_NOFOLLOW` temp files and an atomic rename, so a planted symlink can't redirect a write.
+- **The control API checks the token first.** It authenticates on the request head before reading a
+  body, caps bodies at 64 KB, and times out slow clients.
+
+One thing is still up to you: keep your ds4 checkout somewhere other apps can't write to, such as
+under `~/Documents` (the default). The proxy runs `ds4-server` from that folder.
 
 ## Development
 

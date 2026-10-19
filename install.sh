@@ -16,7 +16,7 @@ GUI="gui/$(id -u)"
 # bootout makes the app quit, which unloads ds4-server first; wait for that
 launchctl bootout "$GUI/$LABEL" 2>/dev/null || true
 for _ in $(seq 50); do
-  pgrep -f "$STATE/app/ds4proxy.py" >/dev/null || launchctl print "$GUI/$LABEL" >/dev/null 2>&1 || break
+  lsof -nP -iTCP:8011 -sTCP:LISTEN >/dev/null 2>&1 || launchctl print "$GUI/$LABEL" >/dev/null 2>&1 || break
   sleep 1
 done
 
@@ -27,17 +27,24 @@ if [ "${1:-}" = "uninstall" ]; then
   exit 0
 fi
 
-mkdir -p "$STATE/app"
-cp "$DIR/ds4proxy.py" "$STATE/app/"
+# older versions ran a copy of the proxy from here; the app now embeds it
+rm -rf "$STATE/app"
 
-# Only rebuilt when its source (or this script) changes: it's ad-hoc signed, so every rebuild
-# looks like a new app to macOS and it would ask for ~/Documents access again.
+# Only rebuilt when a source (or this script) changes: it's ad-hoc signed, so every rebuild
+# looks like a new app to macOS and it would ask for ~/Documents access again. The proxy is
+# compiled into the binary, so editing ds4proxy.py also means a rebuild.
 BIN="$APP/Contents/MacOS/ds4"
-if [ ! -x "$BIN" ] || [ "$DIR/menubar/DS4Menu.swift" -nt "$BIN" ] || [ "$DIR/menubar/logo@2x.png" -nt "$BIN" ] || [ "$0" -nt "$BIN" ]; then
+stale=0
+# a different DS4_DIR also needs a rebuild, since the path is compiled in
+[ "$(cat "$APP/Contents/Resources/ds4-dir" 2>/dev/null)" = "$DS4_DIR" ] || stale=1
+for f in "$DIR/ds4proxy.py" "$DIR/menubar/DS4Menu.swift" "$DIR/menubar/build.sh" "$DIR/menubar/logo@2x.png" "$0"; do
+  [ "$f" -nt "$BIN" ] && stale=1
+done
+if [ ! -x "$BIN" ] || [ $stale = 1 ]; then
 mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
 cp "$DIR/menubar/logo.png" "$DIR/menubar/logo@2x.png" "$APP/Contents/Resources/"
-swiftc -O -target arm64-apple-macos13 -framework AppKit \
-  -o "$BIN" "$DIR/menubar/DS4Menu.swift"
+DS4_DIR="$DS4_DIR" "$DIR/menubar/build.sh" "$BIN"
+printf %s "$DS4_DIR" > "$APP/Contents/Resources/ds4-dir"
 cat > "$APP/Contents/Info.plist" <<EOF
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -55,7 +62,9 @@ cat > "$APP/Contents/Info.plist" <<EOF
 </dict>
 </plist>
 EOF
-codesign --force --sign - "$APP" >/dev/null 2>&1
+# hardened runtime: macOS ignores DYLD_* variables (e.g. planted in the LaunchAgent), so no
+# other code can be loaded into the process that holds the Documents permission
+codesign --force --options runtime --sign - "$APP" >/dev/null 2>&1
 fi
 # KeepAlive only on crash, so "Quit ds4" stays quit until next login
 cat > "$AGENTS/$LABEL.plist" <<EOF
@@ -65,7 +74,6 @@ cat > "$AGENTS/$LABEL.plist" <<EOF
 <dict>
   <key>Label</key><string>$LABEL</string>
   <key>ProgramArguments</key><array><string>$BIN</string></array>
-  <key>EnvironmentVariables</key><dict><key>DS4_DIR</key><string>$DS4_DIR</string></dict>
   <key>RunAtLoad</key><true/>
   <key>KeepAlive</key><dict><key>SuccessfulExit</key><false/></dict>
   <key>LimitLoadToSessionType</key><string>Aqua</string>
