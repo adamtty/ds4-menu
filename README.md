@@ -5,6 +5,7 @@
 **A macOS menu bar app and lazy proxy for [antirez/ds4](https://github.com/antirez/ds4).**<br>
 A local DeepSeek, GLM or Qwen endpoint that's always there, and only holds onto your RAM while something is using it.
 
+[![CI](https://github.com/adamtty/ds4-menu/actions/workflows/ci.yml/badge.svg)](https://github.com/adamtty/ds4-menu/actions/workflows/ci.yml)
 [![macOS 13+](https://img.shields.io/badge/macOS-13%2B-black?logo=apple)](#install)
 [![Apple Silicon](https://img.shields.io/badge/Apple%20Silicon-arm64-555)](#requirements)
 [![Swift](https://img.shields.io/badge/Swift-AppKit-F05138?logo=swift&logoColor=white)](menubar/DS4Menu.swift)
@@ -144,6 +145,18 @@ Regenerate the icon with:
 ```sh
 swift menubar/make-icon.swift menubar/ds4-logo-source.png menubar/
 ```
+
+## Development
+
+```sh
+python3 -m unittest discover -s tests -v   # unit tests + an end-to-end run against a fake ds4-server
+```
+
+The end-to-end test starts the real proxy on ports 18010–18012, with a throwaway `HOME` and
+[`tests/fake-ds4-server`](tests/fake-ds4-server) standing in for ds4, so it doesn't touch a running
+install. CI runs it on macOS, along with the Swift build, `shellcheck` and `ruff`, on
+[StepSecurity Harden-Runner](https://github.com/step-security/harden-runner). Every action is
+pinned to a commit SHA, and [Renovate](https://docs.renovatebot.com/) keeps the pins current.
 
 ## Troubleshooting
 

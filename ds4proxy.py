@@ -26,7 +26,9 @@ import time
 
 DS4_DIR = os.environ.get("DS4_DIR", os.path.expanduser("~/Documents/code-work/ds4"))
 STATE = os.path.expanduser("~/.local/share/ds4-menu")
-LISTEN_PORT, CONTROL_PORT, BACKEND_PORT = 8010, 8011, 8012
+# the menu app talks to CONTROL_PORT, so only change the base for tests
+BASE_PORT = int(os.environ.get("DS4_MENU_BASE_PORT", "8010"))
+LISTEN_PORT, CONTROL_PORT, BACKEND_PORT = BASE_PORT, BASE_PORT + 1, BASE_PORT + 2
 LOCK_FILE = "/tmp/ds4.lock"  # ds4's own one-process-at-a-time lock
 DEFAULTS = {"model": "", "pinned": False, "idle_min": 15, "models": {}, "agent_args": []}
 SKIP_GGUF = re.compile(r"encoder|dspark|\.part$", re.I)
@@ -333,7 +335,8 @@ class Proxy:
         return {
             "state": self.state, "error": self.error, "model": self.settings["model"],
             "streaming": self.streaming(size), "pinned": self.settings["pinned"],
-            "idle_min": self.settings["idle_min"], "unload_in": None if self.state != "ready" or self.settings["pinned"] else int(left),
+            "idle_min": self.settings["idle_min"],
+            "unload_in": None if self.state != "ready" or self.settings["pinned"] else int(left),
             "busy": self.busy(), "connections": len(self.conns), "speeds": self.speeds,
             "loading_for": int(time.time() - self.loaded_at) if self.state == "loading" else 0,
             "models": [{"file": n, "bytes": s, "streaming": self.streaming(s)} for n, s in models.items()],
@@ -348,7 +351,7 @@ class Proxy:
             head = await asyncio.wait_for(reader.readuntil(b"\r\n\r\n"), 10)
             lines = head.decode("latin-1").split("\r\n")
             method, path = lines[0].split(" ")[:2]
-            hdrs = {k.lower(): v.strip() for k, v in (l.split(":", 1) for l in lines[1:] if ":" in l)}
+            hdrs = {k.lower(): v.strip() for k, v in (ln.split(":", 1) for ln in lines[1:] if ":" in ln)}
             body = await reader.readexactly(int(hdrs.get("content-length", 0) or 0))
             if not secrets.compare_digest(hdrs.get("x-token", ""), self.token):
                 code, out = 403, {"error": "bad token"}

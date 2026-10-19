@@ -1,0 +1,5 @@
+# bug-catching rules only; the code keeps its own style (%-formatting, short excepts)
+line-length = 120
+
+[lint]
+select = ["E", "F", "W", "B", "PLE"]
