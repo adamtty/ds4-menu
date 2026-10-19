@@ -1,0 +1,30 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="520" height="419" viewBox="0 0 520 419" font-family="-apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Helvetica Neue', Helvetica, Arial, sans-serif">
+<defs><filter id="inv"><feColorMatrix type="matrix" values="-1 0 0 0 1  0 -1 0 0 1  0 0 -1 0 1  0 0 0 1 0"/></filter><filter id="sh" x="-20%" y="-20%" width="140%" height="140%"><feDropShadow dx="0" dy="8" stdDeviation="10" flood-opacity="0.28"/></filter><clipPath id="r"><rect width="520" height="419" rx="12"/></clipPath></defs>
+<g clip-path="url(#r)"><rect width="520" height="419" fill="#ffffff"/>
+<rect width="520" height="30" fill="#ececec"/>
+<rect x="150" y="4" width="54" height="22" rx="5" fill="#8a8a8e" fill-opacity="0.28"/>
+<image x="161" y="8.5" width="32.7" height="10" href="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAFUAAAAaCAYAAADG+xDjAAAAAXNSR0IArs4c6QAAADhlWElmTU0AKgAAAAgAAYdpAAQAAAABAAAAGgAAAAAAAqACAAQAAAABAAAAVaADAAQAAAABAAAAGgAAAAD0xcIRAAAEm0lEQVRoBcVZS2wOURRuq/WId9W7j7/FgnjEIzYSlZCwFlY0EjYiEQtBYiuxkYgQsSBh0URiYcOGSCRNJCxshISg/YtGUPGqIlr1fZO5f06vOWdm/vmnTvJ17j3PmTP3nnv+aXXVaJqK6W1gHvBntKhiszp46gSOAweBI8BvIA+qhtNBYAtQC/DZJgIjgCTq7QQeSqYypu4NYDkw7OmMw/wSA0mag8lqYIJk5jD+GfpkrKYc/EuXbzH5DKwFlkqBGP/C+IuYW8NpEK4B5itK3TWeoBHzvBPKkM/CuK3hNc/LazjnS1xkBHkHGZGE5kKpXlHkDujxkzoWDxkERnBuFb7EvKkYBlhsBOqDbMCQSxF3lrbwvkPW5yfVCiwdZxnz5rl6WGqIvOlFGMB6th7o+HVWu682TQD+e6D/fySVgT8AfOM8GPMml9SCEeilIfNFS3yGmL/BeFAmladaQSjkNeQqHQJYahgzb+pGgPHAQiOQS7yhUhJZtZkrPmgznDZXzQI3ibh2gdcLxCWC22gzoPkKAkNubUeu5FtAVuLLewrwpJ5tOHP3ZKgEIi7CgqEUvJxaocD61iDm/vAYGPd9pjJ/AL6WVLfVrKTegX2H4rscdjuMJimGPFy4bZPQdChprRTt/0lqI5ha4EHIkrYcM6HLeqlREBjCNk0B/GXAWUOeVPQciueAVsOgHzLujCTEdmqWosgdWqRMrlTrIRm0UoFZ4xiXL1GjVRAQWek6HDCp1q7gKk3aTjVDl/U5iuiDrVkVa4QjqwCnCcxVqgX+BhkPKpYaq8ZBXBF6HHqxns2VoyQBrRUftFN0whXjyHqbSQs5fVkP4NqpddCb4gLneHWlxkoGy5q2pf1bW+EzxJwL7wfnLqnVGBfIUMjdnCIexbZeDgMPAyw1jJk3cRXy1492aDL+fmAPBwmIv/s1Ki08l9S4dipNUq2V6gJbidduOi2fh+srgF/cGgxjPjuRlUo5cjWVp5oV2CUjLvB2KGwylFxgaxsZ5qlEPFi5tVsAratJ5TBG2T1bafs3woDfGaNoAMzgVIsSCt4hjE8BdYLnD13gexCwlclKG+BgpeKE98zvtNbOUUxTs0dgUfSt9oFBQRTY61nEEnIaiLL1eestR2XIrhhxO0N/Jw0d//7KnfNbLBdmQK6mWjVuBjQvh/pRF56s7VECj3ce80cA26kTgNZ2QZSYthqarlWyns0wTyViV/PRt7gGRrlvKc5uCL6PioDcsnE2lZDvDmM+wJX/GqoEtPu6G8YKLlypce2U1E87/goDtixXhWGLGOc5LIbO9+LKtioLMZlngI2Kk27JZ1LZe1l9nNRPM2Y70wF0eUZjsR35kcQdrk+8+OVOJxuG7gAOVJhU1jirnTJ8qaKHkOwC3P+ipOJYJDXNRxJ5b9q4HoLSQRSh5Op3IKrB3yYg6/aQcW5isg2ISij1CvyTM3GVshWsFLGPZ2KjiKWhKAVMaptkZBxfgP0OQOtBuYWsN54xfMm8pzSqzKAZbuoUVzw3XKkJVLj9DyvKadkXYXAgxojfWpN+vIhxZYp7TWl6IZOqEVupT1L4F/dUI/sLLu90AAAAAElFTkSuQmCC"/>
+<text x="20" y="20" font-size="13" font-weight="600" fill="#1d1d1f">Finder</text>
+<text x="80" y="20" font-size="13" fill="#1d1d1f">File</text>
+<text x="400" y="20" font-size="13" fill="#1d1d1f">Mon 19 Oct  21:14</text>
+<rect x="150" y="36" width="340" height="359" rx="9" fill="#f6f6f6" stroke="#d0d0d0" filter="url(#sh)"/>
+<text x="164" y="60" font-size="13" fill="#30d158">●</text>
+<text x="182" y="60" font-size="13" fill="#8a8a8e" xml:space="preserve">Ready · DeepSeek V4 Flash</text>
+<text x="164" y="86" font-size="13" fill="#8a8a8e" xml:space="preserve">    Unloads in 12 min if idle</text>
+<text x="164" y="112" font-size="13" fill="#8a8a8e" xml:space="preserve">    Last request: prompt 790 · reply 39.4 tok/s</text>
+<text x="164" y="138" font-size="13" fill="#8a8a8e" xml:space="preserve">    Model 98 GB · Mac has 31 GB free</text>
+<text x="164" y="164" font-size="13" fill="#1d1d1f" xml:space="preserve">Copy Endpoint  http://127.0.0.1:8010</text>
+<line x1="162" x2="478" y1="177.5" y2="177.5" stroke="#dcdcdc"/>
+<rect x="155" y="184" width="330" height="24" rx="5" fill="#0a64d8"/>
+<text x="164" y="201" font-size="13" fill="#ffffff" xml:space="preserve">Unload Now</text>
+<text x="164" y="227" font-size="13" fill="#1d1d1f" xml:space="preserve">Keep Loaded</text>
+<text x="164" y="253" font-size="13" fill="#1d1d1f" xml:space="preserve">Unload After</text>
+<text x="468" y="253" font-size="12" fill="#1d1d1f">›</text>
+<text x="164" y="279" font-size="13" fill="#1d1d1f" xml:space="preserve">Model</text>
+<text x="468" y="279" font-size="12" fill="#1d1d1f">›</text>
+<line x1="162" x2="478" y1="292.5" y2="292.5" stroke="#dcdcdc"/>
+<text x="164" y="316" font-size="13" fill="#1d1d1f" xml:space="preserve">Open ds4 Agent in Folder…</text>
+<text x="164" y="342" font-size="13" fill="#1d1d1f" xml:space="preserve">Open Log</text>
+<line x1="162" x2="478" y1="355.5" y2="355.5" stroke="#dcdcdc"/>
+<text x="164" y="379" font-size="13" fill="#1d1d1f" xml:space="preserve">Quit ds4</text>
+</g></svg>
