@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/bin/bash
 # Install (or reinstall) the ds4 menu bar app, which runs the oMLX-style lazy proxy for
 # ds4-server on 127.0.0.1:8010, as a per-user LaunchAgent that starts at login.
 # Usage: ./install.sh            install / restart (re-run after editing any source file)
