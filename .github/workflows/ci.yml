@@ -18,6 +18,8 @@ env:
   RUFF_VERSION: 0.17.1
   # renovate: datasource=pypi depName=shellcheck-py
   SHELLCHECK_VERSION: 0.11.0.1
+  # renovate: datasource=pypi depName=zizmor
+  ZIZMOR_VERSION: 1.31.1
 
 jobs:
   lint:
@@ -40,6 +42,9 @@ jobs:
 
       - name: shellcheck
         run: pipx run --spec "shellcheck-py==${SHELLCHECK_VERSION}" shellcheck install.sh menubar/build.sh
+
+      - name: zizmor (workflow security)
+        run: pipx run "zizmor==${ZIZMOR_VERSION}" --offline --min-severity low .github/workflows
 
       - name: ruff
         run: pipx run "ruff==${RUFF_VERSION}" check ds4proxy.py tests/

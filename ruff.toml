@@ -1,5 +1,11 @@
-# bug-catching rules only; the code keeps its own style (%-formatting, short excepts)
+# bug- and security-catching rules only; the code keeps its own style (%-formatting, short excepts)
 line-length = 120
 
 [lint]
-select = ["E", "F", "W", "B", "PLE"]
+select = ["E", "F", "W", "B", "PLE", "S"]
+# S603 flags every subprocess call; the proxy only runs fixed absolute paths with argument lists
+ignore = ["S603"]
+
+[lint.per-file-ignores]
+# tests only open http://127.0.0.1 URLs they build themselves
+"tests/*" = ["S310"]

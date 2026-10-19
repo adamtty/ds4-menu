@@ -7,6 +7,12 @@
     ":semanticCommitsDisabled"
   ],
   "labels": ["dependencies"],
+  "minimumReleaseAge": "3 days",
+  "internalChecksFilter": "strict",
+  "vulnerabilityAlerts": {
+    "labels": ["security"],
+    "minimumReleaseAge": null
+  },
   "packageRules": [
     {
       "description": "Group action and tool bumps into one PR",

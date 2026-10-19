@@ -35,7 +35,7 @@ STATE = os.path.expanduser("~/.local/share/ds4-menu")
 # the menu app talks to CONTROL_PORT, so only change the base for tests
 BASE_PORT = int(os.environ.get("DS4_MENU_BASE_PORT", "8010"))
 LISTEN_PORT, CONTROL_PORT, BACKEND_PORT = BASE_PORT, BASE_PORT + 1, BASE_PORT + 2
-LOCK_FILE = "/tmp/ds4.lock"  # ds4's own one-process-at-a-time lock
+LOCK_FILE = "/tmp/ds4.lock"  # noqa: S108 - ds4's own one-process-at-a-time lock; only ever read
 DEFAULTS = {"model": "", "pinned": False, "idle_min": 15, "models": {}, "agent_args": []}
 SKIP_GGUF = re.compile(r"encoder|dspark|\.part$", re.I)
 SPEED_RE = re.compile(r" (prefill|decoding) .*avg=([\d.]+) t/s")
@@ -96,19 +96,19 @@ async def send_json(writer, code, out):
 
 
 def ram_bytes():
-    return int(subprocess.run(["sysctl", "-n", "hw.memsize"], capture_output=True, text=True).stdout)
+    return int(subprocess.run(["/usr/sbin/sysctl", "-n", "hw.memsize"], capture_output=True, text=True).stdout)
 
 
 def available_bytes():
     """Free + reclaimable pages; close enough to 'what a new 90 GB mmap can get'."""
-    out = subprocess.run(["vm_stat"], capture_output=True, text=True).stdout
+    out = subprocess.run(["/usr/bin/vm_stat"], capture_output=True, text=True).stdout
     page = int(re.search(r"page size of (\d+)", out).group(1))
     n = {k: int(v) for k, v in re.findall(r"Pages (\w+):\s+(\d+)", out)}
     return page * sum(n.get(k, 0) for k in ("free", "inactive", "speculative", "purgeable"))
 
 
 def pid_command(pid):
-    out = subprocess.run(["ps", "-o", "command=", "-p", str(pid)], capture_output=True, text=True).stdout
+    out = subprocess.run(["/bin/ps", "-o", "command=", "-p", str(pid)], capture_output=True, text=True).stdout
     return out.strip()
 
 
@@ -396,7 +396,7 @@ class Proxy:
             finally:
                 try:
                     dst.close()
-                except Exception:
+                except Exception:  # noqa: S110 - the peer is already gone; nothing to report
                     pass
 
         await asyncio.gather(pipe(reader, bw, 0), pipe(br, writer, 1))

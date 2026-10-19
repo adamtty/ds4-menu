@@ -6,6 +6,8 @@
 A local DeepSeek, GLM or Qwen endpoint that's always there, and only holds onto your RAM while something is using it.
 
 [![CI](https://github.com/adamtty/ds4-menu/actions/workflows/ci.yml/badge.svg)](https://github.com/adamtty/ds4-menu/actions/workflows/ci.yml)
+[![CodeQL](https://github.com/adamtty/ds4-menu/actions/workflows/codeql.yml/badge.svg)](https://github.com/adamtty/ds4-menu/actions/workflows/codeql.yml)
+[![OpenSSF Scorecard](https://api.scorecard.dev/projects/github.com/adamtty/ds4-menu/badge)](https://scorecard.dev/viewer/?uri=github.com/adamtty/ds4-menu)
 [![macOS 13+](https://img.shields.io/badge/macOS-13%2B-black?logo=apple)](#install)
 [![Apple Silicon](https://img.shields.io/badge/Apple%20Silicon-arm64-555)](#requirements)
 [![Swift](https://img.shields.io/badge/Swift-AppKit-F05138?logo=swift&logoColor=white)](menubar/DS4Menu.swift)
@@ -170,6 +172,18 @@ model load, so both are locked down:
 
 One thing is still up to you: keep your ds4 checkout somewhere other apps can't write to, such as
 under `~/Documents` (the default). The proxy runs `ds4-server` from that folder.
+
+The repository is protected too:
+
+- **Every commit on `main` is signed.** A ruleset rejects unsigned commits, force-pushes and
+  deleting the branch, and outside changes must pass CI.
+- **Code scanning:** CodeQL (Python, Swift and the workflows), `ruff`'s security rules, `zizmor` for
+  the GitHub Actions workflows, and a weekly [OpenSSF Scorecard](https://scorecard.dev/viewer/?uri=github.com/adamtty/ds4-menu).
+- **Supply chain:** actions are pinned to commit SHAs, CI runs on StepSecurity Harden-Runner, and
+  Renovate waits 3 days before proposing a new release, except for security fixes.
+- **Secrets:** secret scanning with push protection.
+
+Found a problem? See [SECURITY.md](SECURITY.md) to report it privately.
 
 ## Development
 
