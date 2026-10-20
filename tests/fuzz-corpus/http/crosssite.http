@@ -1,0 +1,5 @@
+GET / HTTP/1.1
+Host: evil.example
+Origin: https://evil.example
+Sec-Fetch-Site: cross-site
+

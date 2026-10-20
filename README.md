@@ -198,7 +198,9 @@ install.
 [`tests/test_fuzz.py`](tests/test_fuzz.py) fuzzes the request handling with
 [Hypothesis](https://hypothesis.readthedocs.io/). It throws generated requests at the header
 parser, the public port's gate, and a live proxy, and checks that the model loads if and only if
-the gate allows the request. It needs Python 3.11+:
+the gate allows the request. CI also runs [Atheris](https://github.com/google/atheris), a
+coverage-guided fuzzer, on the raw request handling (`tests/fuzz_http.py`; Linux x86-64 only). The
+Hypothesis tests need Python 3.11+:
 
 ```sh
 python3.13 -m venv .venv && .venv/bin/pip install --require-hashes -r tests/requirements-fuzz.txt
