@@ -319,8 +319,13 @@ class Proxy:
         if not LOOPBACK.match(hdrs.get("host", "")):
             return 421, "the Host header must be 127.0.0.1 or localhost"  # DNS rebinding
         origin = hdrs.get("origin")
-        if origin is not None and not LOOPBACK.match(urllib.parse.urlsplit(origin).netloc):
-            return 403, "cross-origin browser requests aren't allowed"
+        if origin is not None:
+            try:
+                local = bool(LOOPBACK.match(urllib.parse.urlsplit(origin).netloc))
+            except ValueError:  # e.g. "http://[": unparseable is as good as foreign (found by fuzzing)
+                local = False
+            if not local:
+                return 403, "cross-origin browser requests aren't allowed"
         if hdrs.get("sec-fetch-site", "none") not in ("none", "same-origin", "same-site"):
             return 403, "cross-site browser requests aren't allowed"
         route = path.split("?")[0]
@@ -478,7 +483,7 @@ class Proxy:
         public = await asyncio.start_server(self.client, "127.0.0.1", LISTEN_PORT)
         ctl = await asyncio.start_server(self.control, "127.0.0.1", CONTROL_PORT)
         log("listening on 127.0.0.1:%d (control :%d), model %s" % (LISTEN_PORT, CONTROL_PORT, self.settings["model"]))
-        loop = asyncio.get_event_loop()
+        loop = asyncio.get_running_loop()
         done = asyncio.Event()
         for s in (signal.SIGTERM, signal.SIGINT):
             loop.add_signal_handler(s, done.set)
@@ -493,4 +498,8 @@ class Proxy:
 if __name__ == "__main__":
     if not os.path.isdir(DS4_DIR):
         sys.exit("ds4 not found at " + DS4_DIR)
-    asyncio.get_event_loop().run_until_complete(Proxy().main())
+    async def run():
+        # built inside the loop: on Python 3.9 asyncio locks bind to the loop that exists when made
+        await Proxy().main()
+
+    asyncio.run(run())

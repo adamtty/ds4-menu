@@ -61,7 +61,9 @@ class Sizing(unittest.TestCase):
         self.assertIsNone(ask(b"gpt-4o"))  # unknown family
 
 
-class EndToEnd(unittest.TestCase):
+class ProxyFixture:
+    """Starts a real proxy against a throwaway ds4 checkout; mixed into TestCases (fuzz tests too)."""
+
     SETTINGS = {}
 
     def plant(self, state):
@@ -136,6 +138,9 @@ class EndToEnd(unittest.TestCase):
                                      headers={"X-Token": token}, data=b"{}" if method == "POST" else None)
         return json.load(urllib.request.urlopen(req, timeout=30))
 
+
+
+class EndToEnd(ProxyFixture, unittest.TestCase):
     def test_lazy_start_forward_and_stop(self):
         self.assertEqual(self.control("GET", "/status")["state"], "idle")
 
@@ -158,7 +163,6 @@ class EndToEnd(unittest.TestCase):
         with self.assertRaises(urllib.error.HTTPError) as e:
             urllib.request.urlopen(req, timeout=5)
         self.assertEqual(e.exception.code, 403)
-
 
     # -- the public port must not load the model for requests a web page can make --
 

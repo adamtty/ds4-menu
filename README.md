@@ -193,7 +193,17 @@ python3 -m unittest discover -s tests -v   # unit tests + an end-to-end run agai
 
 The end-to-end test starts the real proxy on ports 18010–18012, with a throwaway `HOME` and
 [`tests/fake-ds4-server`](tests/fake-ds4-server) standing in for ds4, so it doesn't touch a running
-install. CI runs it on macOS, along with the Swift build, `shellcheck` and `ruff`, on
+install.
+
+[`tests/test_fuzz.py`](tests/test_fuzz.py) fuzzes the request handling with
+[Hypothesis](https://hypothesis.readthedocs.io/). It throws generated requests at the header
+parser, the public port's gate, and a live proxy, and checks that the model loads if and only if
+the gate allows the request. It needs Python 3.11+:
+
+```sh
+python3.13 -m venv .venv && .venv/bin/pip install --require-hashes -r tests/requirements-fuzz.txt
+cd tests && HYPOTHESIS_PROFILE=ci ../.venv/bin/python -m unittest -v test_fuzz
+``` CI runs it on macOS, along with the Swift build, `shellcheck` and `ruff`, on
 [StepSecurity Harden-Runner](https://github.com/step-security/harden-runner). Every action is
 pinned to a commit SHA, and [Renovate](https://docs.renovatebot.com/) keeps the pins current.
 
