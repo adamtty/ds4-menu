@@ -477,6 +477,9 @@ class Proxy:
         return 200, self.status()
 
     async def main(self):
+        # a blocked-signal mask is inherited by every child: if whatever started us blocked SIGTERM
+        # (as CI runners can), ds4-server would ignore stop requests until the 30 s kill
+        signal.pthread_sigmask(signal.SIG_SETMASK, [])
         self.token = secrets.token_hex(16)
         write_private(self.dir_fd, "token", self.token.encode())
         self.save()
