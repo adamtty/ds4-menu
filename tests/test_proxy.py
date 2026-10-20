@@ -89,7 +89,9 @@ class ProxyFixture:
         self.proc = subprocess.Popen([sys.executable, "-I", PROXY], env=env, stdout=self.log, stderr=subprocess.STDOUT)
         self.token_path = os.path.join(self.state, "token")
         for _ in range(50):
-            if os.path.exists(self.token_path) and self.port_open(BASE):
+            # the real token file (not a planted symlink) and both ports: the control one opens last
+            if (os.path.isfile(self.token_path) and not os.path.islink(self.token_path)
+                    and self.port_open(BASE) and self.port_open(BASE + 1)):
                 break
             time.sleep(0.2)
         else:
