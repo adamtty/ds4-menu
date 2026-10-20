@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Stands in for ds4-server in tests: answers /v1/models and returns a canned chat reply."""
 import json
+import socketserver
 import sys
 from http.server import BaseHTTPRequestHandler, HTTPServer
 
@@ -28,4 +29,12 @@ class Handler(BaseHTTPRequestHandler):
 
 
 print("fake ds4-server args:", " ".join(sys.argv[1:]), flush=True)
-HTTPServer(("127.0.0.1", port), Handler).serve_forever()
+class Server(HTTPServer):
+    def server_bind(self):
+        # HTTPServer's own server_bind looks up our host name (socket.getfqdn), which takes ~35 s on GitHub's
+        # macOS runners and keeps the port closed meanwhile; nothing here uses the name
+        socketserver.TCPServer.server_bind(self)
+        self.server_name, self.server_port = self.server_address[:2]
+
+
+Server(("127.0.0.1", port), Handler).serve_forever()
